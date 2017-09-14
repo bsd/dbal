@@ -19,6 +19,7 @@
 
 namespace Doctrine\DBAL\Platforms;
 
+use Doctrine\DBAL\Events;
 use Doctrine\DBAL\Schema\Index;
 use Doctrine\DBAL\Schema\TableDiff;
 use Doctrine\DBAL\Types\Type;
@@ -91,5 +92,30 @@ class MySQL57Platform extends MySqlPlatform
         parent::initializeDoctrineTypeMappings();
 
         $this->doctrineTypeMapping['json'] = Type::JSON;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function getDropTableSQL($table)
+    {
+        $tableArg = $table;
+
+        if ($table instanceof Table) {
+            $table = $table->getQuotedName($this);
+        } elseif (!is_string($table)) {
+            throw new \InvalidArgumentException('getDropTableSQL() expects $table parameter to be string or \Doctrine\DBAL\Schema\Table.');
+        }
+
+        if (null !== $this->_eventManager && $this->_eventManager->hasListeners(Events::onSchemaDropTable)) {
+            $eventArgs = new SchemaDropTableEventArgs($tableArg, $this);
+            $this->_eventManager->dispatchEvent(Events::onSchemaDropTable, $eventArgs);
+
+            if ($eventArgs->isDefaultPrevented()) {
+                return $eventArgs->getSql();
+            }
+        }
+
+        return 'DROP TABLE `' . $table . '`';
     }
 }
